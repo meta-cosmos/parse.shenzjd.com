@@ -14,6 +14,8 @@
 // 兜底链路（lib/douyinFallback.js public17Parse）对 /f/ 与 /short-video/ 一律返回
 // 5001「快手可能触发风控」，只认 v.kuaishou.com 短链，所以主解析必须自己修好。
 
+import { kuaishouFetch } from "@/lib/kuaishou-fetch";
+
 // 移动端分享页：快手 H5 分享落地页，含 mainMvUrls（无水印 mp4 直链）
 const MOBILE_SHARE_BASE = "https://m.gifshow.com/fw/photo/";
 
@@ -120,7 +122,7 @@ class KuaishouParser {
 
   async getRedirectedUrl(url) {
     try {
-      const response = await fetch(url, {
+      const response = await kuaishouFetch(url, {
         redirect: "follow",
         headers: this.headers,
         signal: AbortSignal.timeout(10000),
@@ -134,10 +136,16 @@ class KuaishouParser {
   /** 单次请求：超时以 TimeoutError 上抛（调用方据此不重试），其余失败返回 null */
   async fetchPage(url) {
     try {
-      const response = await fetch(url, {
-        headers: this.headers,
-        signal: AbortSignal.timeout(15000),
-      });
+      const response = await kuaishouFetch(
+        url,
+        {
+          headers: this.headers,
+          signal: AbortSignal.timeout(15000),
+        },
+        // 只有移动分享页值得代提取（160KB 页面跨境回传是主要成本，见
+        // kuaishou-fetch.js 头注释）；短链 302 没有正文可提取
+        { extract: url.includes("/fw/photo/") ? "kuaishou-min-html" : "" }
+      );
       if (!response.ok) return null;
       return await response.text();
     } catch (e) {
